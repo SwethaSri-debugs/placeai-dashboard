@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlaceAI — Placement Readiness Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── Reset & Variables ──────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:          #080c14;
+      --surface:     #0d1421;
+      --card:        #111827;
+      --card2:       #141e2e;
+      --border:      rgba(255,255,255,0.07);
+      --border-hi:   rgba(99,249,255,0.25);
+
+      --accent:      #63f9ff;
+      --accent2:     #a78bfa;
+      --green:       #34d399;
+      --yellow:      #fbbf24;
+      --red:         #f87171;
+      --pink:        #f472b6;
+
+      --txt:         #e2e8f0;
+      --txt2:        #64748b;
+      --txt3:        #94a3b8;
+
+      --mono:        'Space Mono', monospace;
+      --sans:        'DM Sans', sans-serif;
+
+      --r:           14px;
+      --r-lg:        20px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--txt);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Scanline texture overlay ──────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ─── Layout Shell ───────────────────────────────────── */
+    .shell {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 36px;
+      background: rgba(8,12,20,0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-size: 1.15rem;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+
+    .topbar-right {
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    .badge {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border-hi);
+      color: var(--accent);
+      letter-spacing: 1px;
+    }
+
+    /* ─── Main Two-Column Layout ─────────────────────────── */
+    .workspace {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 0;
+      align-items: start;
+    }
+
+    @media (max-width: 1050px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Input Sidebar ──────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 28px 24px;
+      min-height: calc(100vh - 61px);
+      position: sticky; top: 61px;
+      overflow-y: auto;
+      max-height: calc(100vh - 61px);
+    }
+
+    .sidebar-title {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      color: var(--txt2);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .sidebar-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Form */
+    .form-group { margin-bottom: 18px; }
+
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--txt3);
+      margin-bottom: 7px;
+      text-transform: uppercase;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--txt);
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99,249,255,0.1);
+    }
+
+    .form-group textarea {
+      min-height: 90px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .form-group select option { background: var(--card); }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Range slider */
+    .range-wrap { position: relative; }
+    .range-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      position: absolute; right: 0; top: -22px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      height: 4px;
+      background: var(--card2);
+      border-radius: 4px;
+      padding: 0;
+      cursor: pointer;
+      border: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      cursor: pointer;
+    }
+
+    /* Analyze Button */
+    .analyze-btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 8px;
+      background: linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%);
+      border: 1px solid var(--accent);
+      border-radius: var(--r);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.25s;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .analyze-btn::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(99,249,255,0.1), transparent);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+
+    .analyze-btn:hover::before { opacity: 1; }
+    .analyze-btn:hover {
+      box-shadow: 0 0 24px rgba(99,249,255,0.25);
+      transform: translateY(-1px);
+    }
+    .analyze-btn:active { transform: translateY(0); }
+    .analyze-btn.loading { pointer-events: none; opacity: 0.7; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(99,249,255,0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Dashboard Panel ────────────────────────────────── */
+    .dashboard-panel {
+      padding: 28px 32px;
+      min-height: calc(100vh - 61px);
+    }
+
+    /* Placeholder */
+    .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      text-align: center;
+      gap: 16px;
+    }
+
+    .placeholder-glyph {
+      font-size: 3.5rem;
+      opacity: 0.2;
+      line-height: 1;
+    }
+
+    .placeholder h3 {
+      font-size: 1.1rem;
+      color: var(--txt2);
+      font-weight: 500;
+    }
+
+    .placeholder p {
+      font-size: 0.85rem;
+      color: var(--txt2);
+      max-width: 320px;
+      line-height: 1.7;
+    }
+
+    .placeholder-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      opacity: 0.15;
+      margin-top: 8px;
+    }
+
+    .ph-block {
+      height: 80px;
+      background: var(--card);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+    }
+
+    /* Dashboard content */
+    .dashboard-content { display: none; }
+    .dashboard-content.active {
+      display: block;
+      animation: fadeUp 0.45s ease forwards;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── Score Hero ─────────────────────────────────────── */
+    .score-hero {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 32px;
+      margin-bottom: 24px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 32px;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .score-hero::after {
+      content: '';
+      position: absolute;
+      top: -80px; right: -80px;
+      width: 300px; height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(99,249,255,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    @media (max-width: 700px) {
+      .score-hero { grid-template-columns: 1fr; text-align: center; }
+    }
+
+    /* SVG Ring */
+    .ring-wrap { position: relative; width: 150px; height: 150px; flex-shrink: 0; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg   { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 10; }
+    .ring-fill { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1.4s cubic-bezier(.25,.8,.25,1); }
+
+    .ring-label {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0;
+    }
+    .ring-num {
+      font-family: var(--mono);
+      font-size: 2.2rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--txt);
+    }
+    .ring-sub { font-size: 0.65rem; color: var(--txt2); letter-spacing: 1px; }
+
+    /* Hero text */
+    .hero-info { min-width: 0; }
+    .hero-name { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+    .hero-role { font-size: 0.85rem; color: var(--accent); font-family: var(--mono); margin-bottom: 16px; }
+
+    .status-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 16px;
+      border-radius: 100px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .status-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    .chip-excellent { background: rgba(52,211,153,0.12); color: var(--green); }
+    .chip-excellent .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .chip-good { background: rgba(99,249,255,0.1); color: var(--accent); }
+    .chip-good .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .chip-moderate { background: rgba(251,191,36,0.12); color: var(--yellow); }
+    .chip-moderate .dot { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    .chip-needs { background: rgba(248,113,113,0.12); color: var(--red); }
+    .chip-needs .dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+    /* Quick stats row */
+    .quick-stats {
+      display: flex; gap: 24px; flex-wrap: wrap;
+    }
+
+    .qs-item {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .qs-label { font-size: 0.7rem; color: var(--txt2); letter-spacing: 0.5px; text-transform: uppercase; }
+    .qs-value { font-family: var(--mono); font-size: 1.1rem; color: var(--txt); }
+
+    /* ─── Metrics Row ────────────────────────────────────── */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .metrics-row { grid-template-columns: 1fr; } }
+
+    .metric-tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 18px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+
+    .metric-tile:hover { border-color: var(--border-hi); }
+
+    .mt-accent-bar {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 3px; border-radius: var(--r) var(--r) 0 0;
+    }
+
+    .mt-icon { font-size: 1.2rem; margin-bottom: 10px; }
+    .mt-label { font-size: 0.72rem; color: var(--txt2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .mt-score {
+      font-family: var(--mono);
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      line-height: 1;
+    }
+
+    .mt-bar-bg {
+      height: 4px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .mt-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 1.1s cubic-bezier(.25,.8,.25,1);
+      width: 0;
+    }
+
+    .mt-detail { font-size: 0.76rem; color: var(--txt2); }
+
+    /* ─── Charts Row ─────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 750px) { .charts-row { grid-template-columns: 1fr; } }
+
+    .chart-tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 22px;
+    }
+
+    .tile-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--txt2);
+      font-family: var(--mono);
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .tile-title::before {
+      content: '';
+      width: 3px; height: 12px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+
+    /* ─── Skill Gap ──────────────────────────────────────── */
+    .skill-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 22px;
+      margin-bottom: 24px;
+    }
+
+    .skill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .skill-pill {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      border: 1px solid transparent;
+      transition: transform 0.15s;
+    }
+
+    .skill-pill:hover { transform: translateX(3px); }
+
+    .skill-pill.has    { background: rgba(52,211,153,0.08);  border-color: rgba(52,211,153,0.2);  color: var(--green); }
+    .skill-pill.partial{ background: rgba(251,191,36,0.08);  border-color: rgba(251,191,36,0.2);  color: var(--yellow); }
+    .skill-pill.missing{ background: rgba(248,113,113,0.06); border-color: rgba(248,113,113,0.15); color: var(--red); }
+
+    .skill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .has .skill-dot     { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .partial .skill-dot { background: var(--yellow); }
+    .missing .skill-dot { background: var(--red); }
+
+    /* ─── AI Suggestions ─────────────────────────────────── */
+    .suggestions-section {
+      background: linear-gradient(135deg, rgba(99,249,255,0.04), rgba(167,139,250,0.04));
+      border: 1px solid rgba(99,249,255,0.12);
+      border-radius: var(--r);
+      padding: 22px;
+      margin-bottom: 24px;
+    }
+
+    .suggestion-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+
+    .sug-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: start;
+      transition: border-color 0.2s;
+    }
+
+    .sug-card:hover { border-color: var(--border-hi); }
+
+    .sug-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      margin-top: 2px;
+    }
+    .badge-high   { background: rgba(248,113,113,0.15); color: var(--red); }
+    .badge-medium { background: rgba(251,191,36,0.15);  color: var(--yellow); }
+    .badge-low    { background: rgba(52,211,153,0.15);  color: var(--green); }
+
+    .sug-body h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+    .sug-body p  { font-size: 0.8rem; color: var(--txt3); line-height: 1.5; }
+
+    /* ─── Recs Grid ──────────────────────────────────────── */
+    .recs-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    @media (max-width: 900px) { .recs-row { grid-template-columns: 1fr; } }
+
+    .rec-tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 22px;
+    }
+
+    .rec-head {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .rec-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .ri-jobs   { background: linear-gradient(135deg, #1a2a4a, #0d1e3a); border: 1px solid rgba(99,249,255,0.2); }
+    .ri-skills { background: linear-gradient(135deg, #0d2a1e, #081a12); border: 1px solid rgba(52,211,153,0.2); }
+    .ri-courses{ background: linear-gradient(135deg, #2a1e0d, #1a1208); border: 1px solid rgba(251,191,36,0.2); }
+
+    .rec-title   { font-size: 0.9rem; font-weight: 600; }
+    .rec-subtitle{ font-size: 0.72rem; color: var(--txt2); }
+
+    .rec-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+    .rec-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px;
+      background: var(--card2);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      transition: transform 0.15s;
+      border: 1px solid var(--border);
+    }
+
+    .rec-item:hover { transform: translateX(4px); border-color: var(--border-hi); }
+
+    .rec-item .rec-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .match-chip {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(99,249,255,0.1);
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    /* ─── Section divider text ───────────────────────────── */
+    .section-divider {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 2px;
+      color: var(--txt2);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .section-divider::after { content: ''; flex:1; height:1px; background: var(--border); }
+
+    /* ─── Scrollbar ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--txt2); }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Top Bar ─────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      PLACE_AI
+    </div>
+    <div class="topbar-right">
+      <span class="badge">AI-POWERED</span>
+      <span class="badge">v2.0</span>
+    </div>
+  </header>
+
+  <!-- ── Workspace ──────────────────────────────────── -->
+  <div class="workspace">
+
+    <!-- ── Sidebar Form ──────────────────────────────── -->
+    <aside class="sidebar">
+      <p class="sidebar-title">Student Input</p>
+
+      <form id="studentForm">
+
+        <div class="form-group">
+          <label>Student Name</label>
+          <input type="text" id="studentName" placeholder="e.g. Priya Ramesh" value="Alex Johnson" />
+        </div>
+
+        <div class="form-group">
+          <label>Target Job Role</label>
+          <select id="targetRole">
+            <option value="frontend">Frontend Developer</option>
+            <option value="backend">Backend Developer</option>
+            <option value="fullstack" selected>Full Stack Developer</option>
+            <option value="data">Data Scientist</option>
+            <option value="ml">ML Engineer</option>
+            <option value="devops">DevOps Engineer</option>
+            <option value="mobile">Mobile Developer</option>
+            <option value="cloud">Cloud Architect</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Resume / Skills Summary</label>
+          <textarea id="resumeText" placeholder="Paste resume text or list your skills...">Experienced in JavaScript, React, Node.js, Python. Built 3 full-stack projects including an e-commerce platform. Familiar with MongoDB, PostgreSQL, Git, and basic AWS services. Strong problem-solving skills.</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Aptitude Score (0–100)</label>
+            <input type="number" id="aptitudeScore" placeholder="0–100" min="0" max="100" value="78" />
+          </div>
+          <div class="form-group">
+            <label>Coding Problems</label>
+            <input type="number" id="codingProblems" placeholder="e.g. 150" min="0" value="120" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Certifications</label>
+            <input type="number" id="certifications" placeholder="Count" min="0" value="3" />
+          </div>
+          <div class="form-group">
+            <label>Mock Interview (1–10)</label>
+            <input type="number" id="mockRating" placeholder="1–10" min="1" max="10" step="0.1" value="7.5" />
+          </div>
+        </div>
+
+        <button type="submit" class="analyze-btn" id="analyzeBtn">
+          <span id="btnText">⚡ ANALYZE READINESS</span>
+        </button>
+
+      </form>
+    </aside>
+
+    <!-- ── Dashboard ─────────────────────────────────── -->
+    <main class="dashboard-panel">
+
+      <!-- Placeholder state -->
+      <div class="placeholder" id="placeholder">
+        <div class="placeholder-glyph">◈</div>
+        <h3>Awaiting Analysis</h3>
+        <p>Fill in the student details on the left and click Analyze Readiness to generate an AI-powered placement report.</p>
+        <div class="placeholder-grid">
+          <div class="ph-block"></div>
+          <div class="ph-block"></div>
+          <div class="ph-block"></div>
+        </div>
+      </div>
+
+      <!-- Dashboard output (hidden until analysis runs) -->
+      <div class="dashboard-content" id="dashContent">
+
+        <!-- Score Hero Card -->
+        <div class="score-hero" style="margin-bottom:24px;">
+          <div class="ring-wrap">
+            <svg viewBox="0 0 150 150" width="150" height="150">
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%"   stop-color="#63f9ff"/>
+                  <stop offset="100%" stop-color="#a78bfa"/>
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg"   cx="75" cy="75" r="62"/>
+              <circle class="ring-fill" cx="75" cy="75" r="62"
+                stroke="url(#ringGrad)"
+                stroke-dasharray="389.6"
+                stroke-dashoffset="389.6"
+                id="ringProgress"/>
+            </svg>
+            <div class="ring-label">
+              <div class="ring-num" id="overallScore">0</div>
+              <div class="ring-sub">/ 100</div>
+            </div>
+          </div>
+
+          <div class="hero-info">
+            <div class="hero-name" id="displayName">—</div>
+            <div class="hero-role" id="displayRole">—</div>
+            <div class="status-chip chip-good" id="statusChip">
+              <div class="dot"></div>
+              <span id="statusText">Analyzing…</span>
+            </div>
+            <div class="quick-stats" id="quickStats">
+              <!-- injected -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric Tiles -->
+        <p class="section-divider">Category Scores</p>
+        <div class="metrics-row" id="metricsRow">
+          <!-- 4 tiles injected -->
+        </div>
+
+        <!-- Charts -->
+        <p class="section-divider">Visualizations</p>
+        <div class="charts-row">
+          <div class="chart-tile">
+            <p class="tile-title">Skills Radar</p>
+            <canvas id="radarChart" height="230"></canvas>
+          </div>
+          <div class="chart-tile">
+            <p class="tile-title">Category Breakdown</p>
+            <canvas id="barChart" height="230"></canvas>
+          </div>
+        </div>
+
+        <!-- Skill Gap -->
+        <p class="section-divider">Skill Gap Analysis</p>
+        <div class="skill-section">
+          <p class="tile-title">Role Requirements vs. Your Profile — <span id="roleSkillsTitle" style="color:var(--txt)"></span></p>
+          <div class="skill-grid" id="skillGrid"></div>
+        </div>
+
+        <!-- AI Suggestions -->
+        <p class="section-divider">AI Improvement Plan</p>
+        <div class="suggestions-section">
+          <p class="tile-title">Prioritised Action Items</p>
+          <div class="suggestion-list" id="suggestionList"></div>
+        </div>
+
+        <!-- Recommendations -->
+        <p class="section-divider">Recommendations</p>
+        <div class="recs-row">
+          <div class="rec-tile">
+            <div class="rec-head">
+              <div class="rec-icon ri-jobs">💼</div>
+              <div>
+                <div class="rec-title">Roles to Target</div>
+                <div class="rec-subtitle">Best job matches</div>
+              </div>
+            </div>
+            <ul class="rec-list" id="jobRecs"></ul>
+          </div>
+          <div class="rec-tile">
+            <div class="rec-head">
+              <div class="rec-icon ri-skills">🎯</div>
+              <div>
+                <div class="rec-title">Skills to Learn</div>
+                <div class="rec-subtitle">Priority learning path</div>
+              </div>
+            </div>
+            <ul class="rec-list" id="skillRecs"></ul>
+          </div>
+          <div class="rec-tile">
+            <div class="rec-head">
+              <div class="rec-icon ri-courses">🎓</div>
+              <div>
+                <div class="rec-title">Suggested Courses</div>
+                <div class="rec-subtitle">Top picks for you</div>
+              </div>
+            </div>
+            <ul class="rec-list" id="courseRecs"></ul>
+          </div>
+        </div>
+
+      </div><!-- /dashContent -->
+    </main>
+  </div><!-- /workspace -->
+</div><!-- /shell -->
+
+<script>
+/* ════════════════════════════════════════════════════
+   DATA: Role requirements registry
+   ════════════════════════════════════════════════════ */
+const ROLES = {
+  frontend:  { title:'Frontend Developer',   skills:['JavaScript','React','CSS','HTML','TypeScript','Redux','Webpack','Testing','Git','Responsive Design'], keywords:['javascript','react','vue','angular','css','html','typescript','redux','webpack','sass','tailwind','responsive','ui','ux'] },
+  backend:   { title:'Backend Developer',     skills:['Node.js','Python','Java','SQL','REST APIs','MongoDB','PostgreSQL','Docker','Security','Git'], keywords:['node','python','java','sql','api','rest','mongodb','postgresql','mysql','docker','security','express','django','spring'] },
+  fullstack: { title:'Full Stack Developer',  skills:['JavaScript','React','Node.js','SQL','MongoDB','REST APIs','Git','Docker','AWS','Testing'], keywords:['javascript','react','node','python','sql','mongodb','postgresql','api','rest','docker','aws','git','full-stack','fullstack'] },
+  data:      { title:'Data Scientist',        skills:['Python','SQL','Machine Learning','Statistics','Pandas','NumPy','Visualization','TensorFlow','R','Big Data'], keywords:['python','sql','machine learning','ml','statistics','pandas','numpy','tensorflow','pytorch','visualization','tableau','r','jupyter'] },
+  ml:        { title:'ML Engineer',           skills:['Python','TensorFlow','PyTorch','Deep Learning','MLOps','Docker','Kubernetes','SQL','Statistics','Cloud ML'], keywords:['python','tensorflow','pytorch','deep learning','neural network','mlops','docker','kubernetes','aws','gcp','ml','ai'] },
+  devops:    { title:'DevOps Engineer',       skills:['Docker','Kubernetes','CI/CD','AWS','Linux','Terraform','Jenkins','Monitoring','Scripting','Git'], keywords:['docker','kubernetes','ci/cd','aws','azure','gcp','linux','terraform','jenkins','ansible','monitoring','prometheus','grafana'] },
+  mobile:    { title:'Mobile Developer',      skills:['React Native','Flutter','iOS','Android','JavaScript','Dart','Swift','Kotlin','APIs','Git'], keywords:['react native','flutter','ios','android','swift','kotlin','dart','mobile','app','javascript','typescript'] },
+  cloud:     { title:'Cloud Architect',       skills:['AWS','Azure','GCP','Terraform','Security','Networking','Containers','Serverless','Cost Optimization','Architecture'], keywords:['aws','azure','gcp','cloud','terraform','security','networking','docker','kubernetes','serverless','lambda','architecture'] }
+};
+
+const ROLE_JOBS = {
+  frontend:  ['Frontend Developer','UI Engineer','React Developer','Web Developer'],
+  backend:   ['Backend Developer','API Developer','Node.js Developer','Python Developer'],
+  fullstack: ['Full Stack Developer','Software Engineer','Web Developer','Product Engineer'],
+  data:      ['Data Scientist','Data Analyst','ML Engineer','Business Analyst'],
+  ml:        ['ML Engineer','AI Engineer','Data Scientist','Research Engineer'],
+  devops:    ['DevOps Engineer','SRE','Cloud Engineer','Platform Engineer'],
+  mobile:    ['Mobile Developer','iOS Developer','Android Developer','React Native Dev'],
+  cloud:     ['Cloud Architect','Solutions Architect','Cloud Engineer','DevOps Lead']
+};
+
+const COURSE_MAP = {
+  'JavaScript':'JavaScript: The Complete Guide','React':'React — The Complete Guide',
+  'Node.js':'Node.js Developer Course','Python':'Python for Data Science & ML',
+  'SQL':'Complete SQL Bootcamp','AWS':'AWS Solutions Architect Prep',
+  'Docker':'Docker & Kubernetes: Hands-On','Machine Learning':'ML A-Z with Python',
+  'TensorFlow':'TensorFlow Developer Certificate','TypeScript':'Understanding TypeScript'
+};
+
+const PLATFORMS = ['Udemy','Coursera','Pluralsight','LinkedIn Learning'];
+
+/* Chart instances (kept for destroy/recreate) */
+let radarInst = null, barInst = null;
+
+/* ════════════════════════════════════════════════════
+   CORE: Scoring logic
+   ════════════════════════════════════════════════════ */
+function scoreStudent(d) {
+  const role = ROLES[d.role];
+  const resumeLow = d.resume.toLowerCase();
+  const matched = role.keywords.filter(k => resumeLow.includes(k));
+
+  // Resume quality: keyword match + length bonus + cert bonus
+  const resumeScore = clamp(
+    Math.round((matched.length / role.keywords.length) * 100
+      + (d.resume.length > 200 ? 12 : 0)
+      + d.certifications * 4)
+  );
+
+  // Coding: problems solved + certs + keyword depth
+  const codingScore = clamp(
+    Math.round((Math.min(d.coding, 300) / 300) * 70
+      + d.certifications * 4
+      + (matched.length > 5 ? 14 : matched.length * 2.5))
+  );
+
+  // Aptitude: direct, slight boost
+  const aptitudeScore = clamp(Math.round(d.aptitude * 1.05));
+
+  // Interview: mock rating weighted + resume + coding bonuses
+  const interviewScore = clamp(
+    Math.round((d.mockRating / 10) * 60
+      + d.certifications * 5
+      + (resumeScore > 70 ? 18 : 8)
+      + (d.coding > 100 ? 8 : 3))
+  );
+
+  // Weighted overall
+  const overall = Math.round(
+    resumeScore  * 0.25 +
+    codingScore  * 0.30 +
+    aptitudeScore* 0.20 +
+    interviewScore * 0.25
+  );
+
+  const skillGaps   = buildSkillGaps(d.resume, role);
+  const suggestions = buildSuggestions(d, {resumeScore,codingScore,aptitudeScore,interviewScore}, skillGaps);
+  const recs        = buildRecs(d.role, overall, skillGaps);
+
+  return { resumeScore, codingScore, aptitudeScore, interviewScore, overall, skillGaps, suggestions, recs, matched };
+}
+
+function clamp(v, lo=0, hi=100) { return Math.max(lo, Math.min(hi, v)); }
+
+/* ════════════════════════════════════════════════════
+   CORE: Skill gap analysis
+   ════════════════════════════════════════════════════ */
+function buildSkillGaps(resume, role) {
+  const low = resume.toLowerCase();
+  return role.skills.map(skill => {
+    const sk = skill.toLowerCase();
+    const direct  = low.includes(sk);
+    const partial = !direct && role.keywords.some(k => low.includes(k.split(' ')[0]) || k.includes(sk.split(' ')[0]));
+    return { skill, status: direct ? 'has' : partial ? 'partial' : 'missing' };
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   CORE: AI suggestions generator
+   ════════════════════════════════════════════════════ */
+function buildSuggestions(d, sc, gaps) {
+  const missing = gaps.filter(g => g.status === 'missing').map(g => g.skill);
+  const out = [];
+
+  if (sc.codingScore < 70)
+    out.push({ priority:'high', title:'Boost Coding Practice',
+      desc:`Aim to solve ${Math.max(50, 200 - d.coding)} more problems on LeetCode / HackerRank to strengthen algorithmic thinking.` });
+
+  if (missing.length > 3)
+    out.push({ priority:'high', title:'Close Critical Skill Gaps',
+      desc:`Prioritise learning: ${missing.slice(0,3).join(', ')}. These are must-have for your target role.` });
+
+  if (sc.interviewScore < 75)
+    out.push({ priority:'medium', title:'Mock Interview Frequency',
+      desc:'Schedule 2–3 mock interviews per week. Focus on clear technical explanations and STAR-format behavioural answers.' });
+
+  if (sc.resumeScore < 80)
+    out.push({ priority:'medium', title:'Resume Keyword Optimisation',
+      desc:'Add quantified achievements and role-specific keywords. Tailor it for each job application using the JD.' });
+
+  if (d.certifications < 2)
+    out.push({ priority:'low', title:'Earn Industry Certifications',
+      desc:'AWS, Google Cloud, or platform-specific badges validate skills and improve recruiter confidence significantly.' });
+
+  if (sc.aptitudeScore < 80)
+    out.push({ priority:'medium', title:'Daily Aptitude Practice',
+      desc:'Spend 30 min/day on logical reasoning and quant problems. Platforms like IndiaBix or PrepInsta work well.' });
+
+  return out.slice(0, 5);
+}
+
+/* ════════════════════════════════════════════════════
+   CORE: Recommendations
+   ════════════════════════════════════════════════════ */
+function buildRecs(roleKey, overall, gaps) {
+  const missing = gaps.filter(g => g.status === 'missing').map(g => g.skill);
+  const jobs = (ROLE_JOBS[roleKey] || []).map((j, i) => ({ title:j, match: Math.max(58, overall - i * 5) }));
+  const skills = missing.slice(0, 5);
+  const courses = skills.slice(0, 4).map((sk, i) => ({
+    title: COURSE_MAP[sk] || `${sk} — Zero to Hero`,
+    platform: PLATFORMS[i % PLATFORMS.length]
+  }));
+  return { jobs, skills, courses };
+}
+
+/* ════════════════════════════════════════════════════
+   UI: Animate counter
+   ════════════════════════════════════════════════════ */
+function animNum(el, end, ms=1200, suffix='') {
+  const start = performance.now();
+  const tick = now => {
+    const t = Math.min((now - start) / ms, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(end * ease) + suffix;
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+/* ════════════════════════════════════════════════════
+   UI: Build metric tile HTML
+   ════════════════════════════════════════════════════ */
+function metricTileHTML(id, label, icon, color, score, detail) {
+  return `
+    <div class="metric-tile">
+      <div class="mt-accent-bar" style="background:${color}"></div>
+      <div class="mt-icon">${icon}</div>
+      <div class="mt-label">${label}</div>
+      <div class="mt-score" id="mt-${id}" style="color:${color}">0</div>
+      <div class="mt-bar-bg">
+        <div class="mt-bar-fill" id="mb-${id}" style="background:${color}"></div>
+      </div>
+      <div class="mt-detail" id="md-${id}">${detail}</div>
+    </div>`;
+}
+
+/* ════════════════════════════════════════════════════
+   UI: Render full dashboard
+   ════════════════════════════════════════════════════ */
+function renderDashboard(d, a) {
+  const role = ROLES[d.role];
+
+  // Hero
+  document.getElementById('displayName').textContent = d.name;
+  document.getElementById('displayRole').textContent = `↳ ${role.title}`;
+  document.getElementById('roleSkillsTitle').textContent = role.title;
+
+  // Status chip
+  const chip = document.getElementById('statusChip');
+  const statusMap = [
+    { min:85, cls:'chip-excellent', text:'🌟 Placement Ready' },
+    { min:70, cls:'chip-good',      text:'✅ Almost There'    },
+    { min:50, cls:'chip-moderate',  text:'⚡ In Progress'    },
+    { min:0,  cls:'chip-needs',     text:'🔧 Needs Focus'    }
+  ];
+  const s = statusMap.find(x => a.overall >= x.min);
+  chip.className = `status-chip ${s.cls}`;
+  document.getElementById('statusText').textContent = s.text;
+
+  // Quick stats
+  document.getElementById('quickStats').innerHTML = `
+    <div class="qs-item"><div class="qs-label">Aptitude</div><div class="qs-value">${d.aptitude}/100</div></div>
+    <div class="qs-item"><div class="qs-label">Problems</div><div class="qs-value">${d.coding}</div></div>
+    <div class="qs-item"><div class="qs-label">Certs</div><div class="qs-value">${d.certifications}</div></div>
+    <div class="qs-item"><div class="qs-label">Mock Rating</div><div class="qs-value">${d.mockRating}/10</div></div>`;
+
+  // Ring
+  const circ = 2 * Math.PI * 62; // r=62
+  const ring = document.getElementById('ringProgress');
+  ring.style.strokeDashoffset = circ;
+  setTimeout(() => {
+    ring.style.strokeDashoffset = circ - (a.overall / 100) * circ;
+    animNum(document.getElementById('overallScore'), a.overall, 1400);
+  }, 300);
+
+  // Metric tiles
+  const tilesData = [
+    { id:'resume',    label:'Resume Quality',    icon:'📄', color:'#6366f1', score:a.resumeScore,    detail:`${a.matched.length} relevant keywords found` },
+    { id:'coding',    label:'Coding Skills',     icon:'💻', color:'#34d399', score:a.codingScore,    detail:`${d.coding} problems solved` },
+    { id:'aptitude',  label:'Aptitude',          icon:'🧠', color:'#fbbf24', score:a.aptitudeScore,  detail:`Raw score: ${d.aptitude}/100` },
+    { id:'interview', label:'Interview Readiness',icon:'🎤', color:'#f472b6', score:a.interviewScore, detail:`Mock rating: ${d.mockRating}/10` }
+  ];
+  document.getElementById('metricsRow').innerHTML = tilesData.map(t => metricTileHTML(t.id, t.label, t.icon, t.color, t.score, t.detail)).join('');
+
+  // Animate metric bars
+  tilesData.forEach((t, i) => {
+    setTimeout(() => {
+      const scoreEl = document.getElementById(`mt-${t.id}`);
+      const barEl   = document.getElementById(`mb-${t.id}`);
+      barEl.style.width = t.score + '%';
+      animNum(scoreEl, t.score, 1000);
+    }, 400 + i * 120);
+  });
+
+  // Charts
+  buildCharts(a);
+
+  // Skill gaps
+  document.getElementById('skillGrid').innerHTML = a.skillGaps.map(g => {
+    const icon = g.status === 'has' ? '✓' : g.status === 'partial' ? '◐' : '○';
+    const label = g.status === 'has' ? 'Proficient' : g.status === 'partial' ? 'Basic' : 'To Learn';
+    return `<div class="skill-pill ${g.status}"><div class="skill-dot"></div><span>${g.skill}</span><small style="margin-left:auto;opacity:.6;font-size:.7rem">${label}</small></div>`;
+  }).join('');
+
+  // Suggestions
+  document.getElementById('suggestionList').innerHTML = a.suggestions.map(s => `
+    <div class="sug-card">
+      <span class="sug-badge badge-${s.priority}">${s.priority.toUpperCase()}</span>
+      <div class="sug-body"><h4>${s.title}</h4><p>${s.desc}</p></div>
+    </div>`).join('');
+
+  // Job recs
+  document.getElementById('jobRecs').innerHTML = a.recs.jobs.map(j => `
+    <li class="rec-item">
+      <span>💼</span>
+      <span class="rec-label">${j.title}</span>
+      <span class="match-chip">${j.match}%</span>
+    </li>`).join('');
+
+  // Skill recs
+  document.getElementById('skillRecs').innerHTML = a.recs.skills.length
+    ? a.recs.skills.map(sk => `<li class="rec-item"><span>🎯</span><span class="rec-label">${sk}</span></li>`).join('')
+    : '<li class="rec-item" style="color:var(--txt2)">All key skills detected ✓</li>';
+
+  // Course recs
+  document.getElementById('courseRecs').innerHTML = a.recs.courses.length
+    ? a.recs.courses.map(c => `
+        <li class="rec-item">
+          <span>📖</span>
+          <span class="rec-label">${c.title}</span>
+          <span class="match-chip">${c.platform}</span>
+        </li>`).join('')
+    : '<li class="rec-item" style="color:var(--txt2)">No immediate courses needed</li>';
+}
+
+/* ════════════════════════════════════════════════════
+   UI: Build / recreate charts
+   ════════════════════════════════════════════════════ */
+function buildCharts(a) {
+  if (radarInst) radarInst.destroy();
+  if (barInst)   barInst.destroy();
+
+  const TICK_COLOR  = '#64748b';
+  const GRID_COLOR  = 'rgba(255,255,255,0.05)';
+  const LABEL_COLOR = '#94a3b8';
+
+  // Radar
+  radarInst = new Chart(document.getElementById('radarChart').getContext('2d'), {
+    type: 'radar',
+    data: {
+      labels: ['Resume','Coding','Aptitude','Interview','Certs'],
+      datasets: [
+        {
+          label: 'Your Profile',
+          data: [a.resumeScore, a.codingScore, a.aptitudeScore, a.interviewScore, Math.min(100, a.resumeScore + 8)],
+          backgroundColor: 'rgba(99,249,255,0.12)',
+          borderColor: '#63f9ff',
+          pointBackgroundColor: '#63f9ff',
+          pointBorderColor: '#0d1421',
+          pointRadius: 5,
+        },
+        {
+          label: 'Target Level',
+          data: [85, 85, 80, 85, 75],
+          backgroundColor: 'rgba(167,139,250,0.06)',
+          borderColor: 'rgba(167,139,250,0.5)',
+          borderDash: [5,4],
+          pointBackgroundColor: '#a78bfa',
+          pointRadius: 4,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 1000 },
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { color: TICK_COLOR, backdropColor: 'transparent', stepSize: 25, font: { family: "'Space Mono'" } },
+          grid: { color: GRID_COLOR },
+          pointLabels: { color: LABEL_COLOR, font: { size: 11 } }
+        }
+      },
+      plugins: { legend: { labels: { color: LABEL_COLOR, boxWidth: 10, font: { size: 11 } } } }
+    }
+  });
+
+  // Bar
+  barInst = new Chart(document.getElementById('barChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: ['Resume','Coding','Aptitude','Interview'],
+      datasets: [{
+        label: 'Score',
+        data: [a.resumeScore, a.codingScore, a.aptitudeScore, a.interviewScore],
+        backgroundColor: ['rgba(99,102,241,0.75)','rgba(52,211,153,0.75)','rgba(251,191,36,0.75)','rgba(244,114,182,0.75)'],
+        borderColor:     ['#6366f1','#34d399','#fbbf24','#f472b6'],
+        borderWidth: 1,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 1000 },
+      scales: {
+        y: { min:0, max:100, ticks: { color: TICK_COLOR, font: { family:"'Space Mono'", size:10 } }, grid: { color: GRID_COLOR } },
+        x: { ticks: { color: LABEL_COLOR }, grid: { display: false } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   Event: Form submit
+   ════════════════════════════════════════════════════ */
+document.getElementById('studentForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const btn = document.getElementById('analyzeBtn');
+  const txt = document.getElementById('btnText');
+  btn.classList.add('loading');
+  txt.innerHTML = '<div class="spinner"></div> ANALYZING…';
+
+  // Simulated async "AI" processing
+  await new Promise(r => setTimeout(r, 1400));
+
+  const data = {
+    name:           document.getElementById('studentName').value.trim()    || 'Student',
+    role:           document.getElementById('targetRole').value,
+    resume:         document.getElementById('resumeText').value,
+    aptitude:       Math.min(100, Math.max(0,  parseFloat(document.getElementById('aptitudeScore').value)  || 0)),
+    coding:         Math.max(0,               parseInt  (document.getElementById('codingProblems').value) || 0),
+    certifications: Math.max(0,               parseInt  (document.getElementById('certifications').value)  || 0),
+    mockRating:     Math.min(10, Math.max(1,  parseFloat(document.getElementById('mockRating').value)     || 1))
+  };
+
+  const analysis = scoreStudent(data);
+
+  // Show dashboard
+  document.getElementById('placeholder').style.display = 'none';
+  const dash = document.getElementById('dashContent');
+  dash.classList.remove('active'); // reset animation
+  void dash.offsetWidth;
+  dash.classList.add('active');
+
+  renderDashboard(data, analysis);
+
+  btn.classList.remove('loading');
+  txt.textContent = '⚡ RE-ANALYZE';
+});
+</script>
+</body>
+</html>
